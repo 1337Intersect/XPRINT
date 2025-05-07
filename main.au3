@@ -36,7 +36,7 @@
  AutoIt Version: 3.3.16.1
  Author:         Riccardo Gabetti
  Company: 		 Pernix
- Version:		 1.15.0
+ Version:		 1.15.1
  Date: 07/05/2025
 
 #ce ----------------------------------------------------------------------------
@@ -61,7 +61,7 @@ Global $sVersionFileURL = "https://raw.githubusercontent.com/" & $GitHubVar &"/r
 Global $sDownloadBaseURL = "https://github.com/" & $GitHubVar &"/releases/download/"
 
 ; La versione attuale del programma
-Global $sVersioneAttuale = "1.15.0"
+Global $sVersioneAttuale = "1.15.1"
 
 ; Inizializza il file INI delle stampanti
 $iniFile = @AppDataDir & "\stampanti.ini"
@@ -71,7 +71,7 @@ $iniFile = @AppDataDir & "\stampanti.ini"
 ; Description.....:	Create the main GUI
 ;------------------------------------------------------
 Func _guiCreate()
-    $hGUI = GUICreate("XPRINT 1.15.0", 498, 285, Default, Default)
+    $hGUI = GUICreate("XPRINT 1.15.1", 498, 285, Default, Default)
 
     $List_1 = GUICtrlCreateList("", 10, 10, 331, 226)
     $Button_1 = GUICtrlCreateButton("Aggiorna", 345, 55, 141, 31)
@@ -124,6 +124,7 @@ Func _main()
         IniWrite($sConfigFile, "Config", "Directory", "")
         IniWrite($sConfigFile, "Config", "FileType", "")
 		IniWrite($sConfigFile, "Config", "UseDefaultExtensions", "")
+		IniWrite($sConfigFile, "Updates", "SkipVersion", "")
     EndIf
 
 LoadFiles()
@@ -603,12 +604,12 @@ EndFunc
 
 ; Funzione principale per il controllo degli aggiornamenti
 Func ControllaAggiornamenti($bSilent = False)
-
     ; Percorso dove salvare l'aggiornamento
     Local $sTempPath = @TempDir & "\XPRINT_update.exe"
 
     ; Debug - Mostra la versione corrente
     ConsoleWrite("Versione attuale: " & $sVersioneAttuale & @CRLF)
+
     ; Inizializza WinHTTP
     Local $hOpen = _WinHttpOpen()
     If @error Then
@@ -710,77 +711,101 @@ Func ControllaAggiornamenti($bSilent = False)
 
     ; Confronta le versioni
     If _ConfrontaVersioni($sVersioneAttuale, $sNuovaVersione) < 0 Then
+        ; Verifica se l'utente ha scelto di saltare questa versione
+        Local $sSkipVersion = IniRead(@AppDataDir & "\config.ini", "Updates", "SkipVersion", "")
+        If $sSkipVersion = $sNuovaVersione Then
+            ; L'utente ha scelto di saltare questa versione
+            ConsoleWrite("Versione " & $sNuovaVersione & " saltata dall'utente." & @CRLF)
+            Return False
+        EndIf
+
         ; Una nuova versione è disponibile
-        Local $sMsg = "È disponibile la versione " & $sNuovaVersione & " di XPRINT." & @CRLF & @CRLF & "Versione attuale: " & $sVersioneAttuale & @CRLF & "Vuoi aggiornare adesso?"
+        If $bSilent Then
+            ; In modalità silenziosa, mostriamo la GUI moderna
+            Local $sAction = MostraFinestraAggiornamento($sVersioneAttuale, $sNuovaVersione)
 
-        If $bSilent Or MsgBox($MB_YESNO + $MB_ICONINFORMATION, "Aggiornamento Disponibile", $sMsg) = $IDYES Then
-            ; Costruisci l'URL di download
-            Local $sDownloadURL = $sDownloadBaseURL & "v" & $sNuovaVersione & "/" & $sNomeFile
-            ConsoleWrite("URL download: " & $sDownloadURL & @CRLF)
-
-            ; Mostra una barra di progresso per il download
-            Local $hDownloadProgressGUI = GUICreate("Download Aggiornamento", 300, 100)
-            Local $idProgressBar = GUICtrlCreateProgress(10, 40, 280, 20)
-            Local $idStatusLabel = GUICtrlCreateLabel("Download in corso...", 10, 20, 280, 20)
-            GUISetState(@SW_SHOW, $hDownloadProgressGUI)
-
-            ; Scarica il nuovo eseguibile
-            Local $hDownload = InetGet($sDownloadURL, $sTempPath, $INET_FORCERELOAD, $INET_DOWNLOADBACKGROUND)
-
-            ; Monitora il progresso del download
-            Do
-                ; Aggiorna la barra di progresso
-                Local $iBytes = InetGetInfo($hDownload, $INET_DOWNLOADREAD)
-                Local $iTotalBytes = InetGetInfo($hDownload, $INET_DOWNLOADSIZE)
-
-                If $iTotalBytes > 0 Then
-                    GUICtrlSetData($idProgressBar, Int($iBytes * 100 / $iTotalBytes))
-                    GUICtrlSetData($idStatusLabel, "Download in corso... " & _FormatBytes($iBytes) & " / " & _FormatBytes($iTotalBytes))
-                EndIf
-
-                Sleep(100)
-            Until InetGetInfo($hDownload, $INET_DOWNLOADCOMPLETE)
-
-            ; Chiudi la GUI di download
-            GUIDelete($hDownloadProgressGUI)
-
-            ; Verifica se il download è avvenuto con successo
-            If InetGetInfo($hDownload, $INET_DOWNLOADSUCCESS) Then
-                ; Verifica che il file scaricato esista e abbia dimensioni > 0
-                If FileExists($sTempPath) And FileGetSize($sTempPath) > 0 Then
-                    ; Crea un batch per l'installazione dell'aggiornamento
-                    Local $sBatchFile = @TempDir & "\XPRINT_updater.bat"
-                    Local $hBatchFile = FileOpen($sBatchFile, $FO_OVERWRITE)
-
-                    FileWrite($hBatchFile, "@echo off" & @CRLF)
-                    FileWrite($hBatchFile, "echo Attendere, aggiornamento di XPRINT in corso..." & @CRLF)
-                    FileWrite($hBatchFile, "ping 127.0.0.1 -n 3 > nul" & @CRLF) ; Attendi un po'
-                    FileWrite($hBatchFile, "if exist """ & @ScriptFullPath & """ (" & @CRLF)
-                    FileWrite($hBatchFile, "    del /f /q """ & @ScriptFullPath & """" & @CRLF)
-                    FileWrite($hBatchFile, ")" & @CRLF)
-                    FileWrite($hBatchFile, "if exist """ & $sTempPath & """ (" & @CRLF)
-                    FileWrite($hBatchFile, "    copy /y """ & $sTempPath & """ """ & @ScriptFullPath & """" & @CRLF)
-                    FileWrite($hBatchFile, "    del /f /q """ & $sTempPath & """" & @CRLF)
-                    FileWrite($hBatchFile, ")" & @CRLF)
-                    FileWrite($hBatchFile, "start """" """ & @ScriptFullPath & """" & @CRLF)
-                    FileWrite($hBatchFile, "del ""%~f0""" & @CRLF) ; Auto-elimina il batch
-
-                    FileClose($hBatchFile)
-
-                    ; Esegui il batch e termina questo programma
-                    MsgBox($MB_ICONINFORMATION, "Aggiornamento", "XPRINT verrà chiuso e aggiornato. Al termine, verrà riavviato automaticamente.")
-                    ShellExecute($sBatchFile, "", "", "", @SW_HIDE)
-                    Exit
-                Else
-                    MsgBox($MB_ICONERROR, "Errore", "File di aggiornamento non valido o danneggiato.")
-                    FileDelete($sTempPath) ; Elimina il file scaricato se non valido
+            ; Gestiamo l'azione scelta dall'utente
+            Switch $sAction
+                Case "CLOSE", "SKIP", "REMIND"
+                    ; L'utente ha chiuso, saltato o rimandato l'aggiornamento
                     Return False
-                EndIf
-            Else
-                ; Errore nel download
-                MsgBox($MB_ICONERROR, "Errore", "Impossibile scaricare l'aggiornamento. Riprova più tardi." & @CRLF & "URL: " & $sDownloadURL)
+                Case "UPDATE"
+                    ; Continua con l'aggiornamento
+                    ConsoleWrite("Utente ha scelto di aggiornare." & @CRLF)
+                    ; Il codice prosegue sotto
+                Case Else
+                    Return False
+            EndSwitch
+        Else
+            ; In modalità non silenziosa, chiediamo direttamente conferma
+            Local $sMsg = "È disponibile la versione " & $sNuovaVersione & " di XPRINT." & @CRLF & @CRLF & "Versione attuale: " & $sVersioneAttuale & @CRLF & "Vuoi aggiornare adesso?"
+            If MsgBox($MB_YESNO + $MB_ICONINFORMATION, "Aggiornamento Disponibile", $sMsg) <> $IDYES Then
                 Return False
             EndIf
+        EndIf
+
+        ; Costruisci l'URL di download
+        Local $sDownloadURL = $sDownloadBaseURL & "v" & $sNuovaVersione & "/" & $sNomeFile
+        ConsoleWrite("URL download: " & $sDownloadURL & @CRLF)
+
+        ; Mostra una barra di progresso per il download
+        Local $hDownloadProgressGUI = GUICreate("Download Aggiornamento", 300, 100)
+        Local $idProgressBar = GUICtrlCreateProgress(10, 40, 280, 20)
+        Local $idStatusLabel = GUICtrlCreateLabel("Download in corso...", 10, 20, 280, 20)
+        GUISetState(@SW_SHOW, $hDownloadProgressGUI)
+
+        ; Scarica il nuovo eseguibile
+        Local $hDownload = InetGet($sDownloadURL, $sTempPath, $INET_FORCERELOAD, $INET_DOWNLOADBACKGROUND)
+
+        ; Monitora il progresso del download
+        Do
+            ; Aggiorna la barra di progresso
+            Local $iBytes = InetGetInfo($hDownload, $INET_DOWNLOADREAD)
+            Local $iTotalBytes = InetGetInfo($hDownload, $INET_DOWNLOADSIZE)
+            If $iTotalBytes > 0 Then
+                GUICtrlSetData($idProgressBar, Int($iBytes * 100 / $iTotalBytes))
+                GUICtrlSetData($idStatusLabel, "Download in corso... " & _FormatBytes($iBytes) & " / " & _FormatBytes($iTotalBytes))
+            EndIf
+            Sleep(100)
+        Until InetGetInfo($hDownload, $INET_DOWNLOADCOMPLETE)
+
+        ; Chiudi la GUI di download
+        GUIDelete($hDownloadProgressGUI)
+
+        ; Verifica se il download è avvenuto con successo
+        If InetGetInfo($hDownload, $INET_DOWNLOADSUCCESS) Then
+            ; Verifica che il file scaricato esista e abbia dimensioni > 0
+            If FileExists($sTempPath) And FileGetSize($sTempPath) > 0 Then
+                ; Crea un batch per l'installazione dell'aggiornamento
+                Local $sBatchFile = @TempDir & "\XPRINT_updater.bat"
+                Local $hBatchFile = FileOpen($sBatchFile, $FO_OVERWRITE)
+                FileWrite($hBatchFile, "@echo off" & @CRLF)
+                FileWrite($hBatchFile, "echo Attendere, aggiornamento di XPRINT in corso..." & @CRLF)
+                FileWrite($hBatchFile, "ping 127.0.0.1 -n 3 > nul" & @CRLF) ; Attendi un po'
+                FileWrite($hBatchFile, "if exist """ & @ScriptFullPath & """ (" & @CRLF)
+                FileWrite($hBatchFile, "    del /f /q """ & @ScriptFullPath & """" & @CRLF)
+                FileWrite($hBatchFile, ")" & @CRLF)
+                FileWrite($hBatchFile, "if exist """ & $sTempPath & """ (" & @CRLF)
+                FileWrite($hBatchFile, "    copy /y """ & $sTempPath & """ """ & @ScriptFullPath & """" & @CRLF)
+                FileWrite($hBatchFile, "    del /f /q """ & $sTempPath & """" & @CRLF)
+                FileWrite($hBatchFile, ")" & @CRLF)
+                FileWrite($hBatchFile, "start """" """ & @ScriptFullPath & """" & @CRLF)
+                FileWrite($hBatchFile, "del ""%~f0""" & @CRLF) ; Auto-elimina il batch
+                FileClose($hBatchFile)
+
+                ; Esegui il batch e termina questo programma
+                MsgBox($MB_ICONINFORMATION, "Aggiornamento", "XPRINT verrà chiuso e aggiornato. Al termine, verrà riavviato automaticamente.")
+                ShellExecute($sBatchFile, "", "", "", @SW_HIDE)
+                Exit
+            Else
+                MsgBox($MB_ICONERROR, "Errore", "File di aggiornamento non valido o danneggiato.")
+                FileDelete($sTempPath) ; Elimina il file scaricato se non valido
+                Return False
+            EndIf
+        Else
+            ; Errore nel download
+            MsgBox($MB_ICONERROR, "Errore", "Impossibile scaricare l'aggiornamento. Riprova più tardi." & @CRLF & "URL: " & $sDownloadURL)
+            Return False
         EndIf
     Else
         ; Nessun aggiornamento disponibile
@@ -871,4 +896,110 @@ Func _CreaFileVersione($sPath, $sVersion, $sFilename = "XPRINT.exe")
     FileClose($hFile)
 
     Return True
+EndFunc
+
+; Funzione per mostrare la finestra di aggiornamento moderna
+Func MostraFinestraAggiornamento($sVersioneAttuale, $sNuovaVersione)
+    ; Crea una GUI con sfondo scuro e bordi minimali
+    Local $hUpdateGUI = GUICreate("Update", 400, 200, -1, -1, BitOR($WS_POPUP, $WS_BORDER), BitOR($WS_EX_TOPMOST, $WS_EX_TOOLWINDOW))
+
+    ; Imposta il colore di sfondo scuro
+    GUISetBkColor(0x202020, $hUpdateGUI)
+
+    ; Titolo - "Found a new software update"
+    Local $lblTitle = GUICtrlCreateLabel("Found a new software update", 20, 20, 360, 30)
+    GUICtrlSetFont($lblTitle, 12, 600, 0, "Segoe UI")
+    GUICtrlSetColor($lblTitle, 0xFFFFFF)
+    GUICtrlSetBkColor($lblTitle, -2) ; Trasparente
+
+    ; Icona download
+    Local $icoDownload = GUICtrlCreateLabel("↓", 55, 70, 40, 40)
+    GUICtrlSetFont($icoDownload, 24, 400, 0, "Segoe UI")
+    GUICtrlSetColor($icoDownload, 0xFFFFFF)
+    GUICtrlSetBkColor($icoDownload, -2) ; Trasparente
+
+    ; Versione corrente
+    Local $lblCurrentVersion = GUICtrlCreateLabel("Current version: " & $sVersioneAttuale, 100, 65, 300, 20)
+    GUICtrlSetFont($lblCurrentVersion, 9, 400, 0, "Segoe UI")
+    GUICtrlSetColor($lblCurrentVersion, 0xAAAAAA)
+    GUICtrlSetBkColor($lblCurrentVersion, -2) ; Trasparente
+
+    ; Versione aggiornamento
+    Local $lblUpdateVersion = GUICtrlCreateLabel("Update version: " & $sNuovaVersione, 100, 85, 300, 20)
+    GUICtrlSetFont($lblUpdateVersion, 9, 400, 0, "Segoe UI")
+    GUICtrlSetColor($lblUpdateVersion, 0xAAAAAA)
+    GUICtrlSetBkColor($lblUpdateVersion, -2) ; Trasparente
+
+    ; Link "Release info"
+    Local $lblReleaseInfo = GUICtrlCreateLabel("Release info", 100, 115, 100, 20)
+    GUICtrlSetFont($lblReleaseInfo, 9, 400, 4, "Segoe UI") ; Sottolineato
+    GUICtrlSetColor($lblReleaseInfo, 0x6495ED) ; Azzurro
+    GUICtrlSetBkColor($lblReleaseInfo, -2) ; Trasparente
+    GUICtrlSetCursor($lblReleaseInfo, 0) ; Cambia cursore a mano
+
+    ; Pulsante "Skip this version" (rosso)
+    Local $btnSkip = GUICtrlCreateButton("Skip this version", 20, 150, 110, 30)
+    GUICtrlSetFont($btnSkip, 9, 400, 0, "Segoe UI")
+    GUICtrlSetColor($btnSkip, 0xFFFFFF)
+    GUICtrlSetBkColor($btnSkip, 0x8B0000) ; Rosso scuro
+
+    ; Pulsante "Remind later" (blu)
+    Local $btnRemind = GUICtrlCreateButton("Remind later", 140, 150, 110, 30)
+    GUICtrlSetFont($btnRemind, 9, 400, 0, "Segoe UI")
+    GUICtrlSetColor($btnRemind, 0xFFFFFF)
+    GUICtrlSetBkColor($btnRemind, 0x483D8B) ; Blu scuro
+
+    ; Pulsante "Update" (verde)
+    Local $btnUpdate = GUICtrlCreateButton("⬇ Update", 260, 150, 110, 30)
+    GUICtrlSetFont($btnUpdate, 9, 400, 0, "Segoe UI")
+    GUICtrlSetColor($btnUpdate, 0xFFFFFF)
+    GUICtrlSetBkColor($btnUpdate, 0x006400) ; Verde scuro
+
+    ; Pulsante X per chiudere
+    Local $btnClose = GUICtrlCreateLabel("✕", 370, 10, 20, 20)
+    GUICtrlSetFont($btnClose, 10, 400, 0, "Segoe UI")
+    GUICtrlSetColor($btnClose, 0xAAAAAA)
+    GUICtrlSetBkColor($btnClose, -2) ; Trasparente
+    GUICtrlSetCursor($btnClose, 0) ; Cambia cursore a mano
+
+    ; Centro la finestra sullo schermo
+    Local $aPos = WinGetPos($hUpdateGUI)
+    WinMove($hUpdateGUI, "", (@DesktopWidth - $aPos[2]) / 2, (@DesktopHeight - $aPos[3]) / 2)
+
+    ; Mostra la GUI
+    GUISetState(@SW_SHOW, $hUpdateGUI)
+
+    ; Rendi la finestra trascinabile
+    Local $bDragging = False
+    Local $aMouse, $aWin
+
+    ; Loop principale
+    While 1
+        Local $nMsg = GUIGetMsg()
+        Switch $nMsg
+            Case $GUI_EVENT_CLOSE, $btnClose
+                GUIDelete($hUpdateGUI)
+                Return "CLOSE"
+
+            Case $btnSkip
+                ; Salva in config che questa versione va saltata
+                IniWrite(@AppDataDir & "\config.ini", "Updates", "SkipVersion", $sNuovaVersione)
+                GUIDelete($hUpdateGUI)
+                Return "SKIP"
+
+            Case $btnRemind
+                ; Non fare nulla, si chiude e alla prossima esecuzione ricontrollerà
+                GUIDelete($hUpdateGUI)
+                Return "REMIND"
+
+            Case $btnUpdate
+                ; Avvia il processo di aggiornamento
+                GUIDelete($hUpdateGUI)
+                Return "UPDATE"
+
+            Case $lblReleaseInfo
+                ; Apri la pagina delle note di rilascio (puoi personalizzare l'URL)
+                ShellExecute("https://github.com/" & $GitHubVar & "/releases/tag/v" & $sNuovaVersione)
+        EndSwitch
+    WEnd
 EndFunc
