@@ -1,0 +1,170 @@
+﻿<!-- Views/MainWindow.xaml -->
+<Window x:Class="XPRINT.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:XPRINT.Views"
+        mc:Ignorable="d"
+        Title="XPRINT" Height="450" Width="800"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="CanMinimize">
+
+    <Window.Resources>
+        <!-- Stili per i pulsanti -->
+        <Style x:Key="ModernButton" TargetType="Button">
+            <Setter Property="Height" Value="40"/>
+            <Setter Property="Margin" Value="0,5,0,5"/>
+            <Setter Property="Background" Value="#F0F0F0"/>
+            <Setter Property="Foreground" Value="#333333"/>
+            <Setter Property="BorderBrush" Value="#CCCCCC"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" 
+                                BorderBrush="{TemplateBinding BorderBrush}" 
+                                BorderThickness="1" 
+                                CornerRadius="3">
+                            <ContentPresenter HorizontalAlignment="Center" 
+                                             VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#E0E0E0"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter Property="Background" Value="#D0D0D0"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="300"/>
+        </Grid.ColumnDefinitions>
+
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Menu principale -->
+        <Menu Grid.Row="0" Grid.ColumnSpan="3">
+            <MenuItem Header="Impostazioni">
+                <MenuItem Header="Seleziona Cartella" Command="{Binding SelectFolderCommand}"/>
+                <MenuItem Header="Imposta tipo file" Command="{Binding SetFileTypeCommand}"/>
+                <Separator/>
+                <MenuItem Header="Esci" Command="{Binding ExitCommand}"/>
+            </MenuItem>
+            <MenuItem Header="Strumenti">
+                <MenuItem Header="Reimposta Valori" Command="{Binding ResetValuesCommand}"/>
+                <MenuItem Header="Controlla Aggiornamenti" Command="{Binding CheckUpdatesCommand}"/>
+            </MenuItem>
+        </Menu>
+
+        <!-- Sezione sinistra: Lista dei file -->
+        <Grid Grid.Row="1" Grid.Column="0" Margin="10">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <TextBlock Grid.Row="0" Text="File disponibili" 
+                       FontWeight="Bold" FontSize="14" Margin="0,0,0,10"/>
+
+            <ListBox Grid.Row="1" ItemsSource="{Binding Files}" 
+                     SelectedItem="{Binding SelectedFile}"
+                     BorderBrush="#CCCCCC" BorderThickness="1"/>
+
+            <CheckBox Grid.Row="2" Content="Usa estensioni predefinite" 
+                      IsChecked="{Binding UseDefaultExtensions}"
+                      Margin="0,10,0,0"/>
+        </Grid>
+
+        <!-- Separatore verticale -->
+        <GridSplitter Grid.Row="1" Grid.Column="1" 
+                      Width="1" HorizontalAlignment="Center" 
+                      Background="#CCCCCC"/>
+
+        <!-- Sezione destra: Impostazioni stampante e pulsanti -->
+        <Grid Grid.Row="1" Grid.Column="2" Margin="10">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <TextBlock Grid.Row="0" Text="Impostazioni Stampante" 
+                       FontWeight="Bold" FontSize="14" Margin="0,0,0,10"/>
+
+            <StackPanel Grid.Row="1" Margin="0,0,0,15">
+                <TextBlock Text="IP Stampante:" Margin="0,0,0,5"/>
+                <!-- Creiamo un controllo simile all'IP Address di AutoIt -->
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <TextBox Grid.Column="0" Text="{Binding IpSegment1}" 
+                             MaxLength="3" TextAlignment="Center"/>
+                    <TextBlock Grid.Column="1" Text="." VerticalAlignment="Center" 
+                               Margin="2,0"/>
+                    <TextBox Grid.Column="2" Text="{Binding IpSegment2}" 
+                             MaxLength="3" TextAlignment="Center"/>
+                    <TextBlock Grid.Column="3" Text="." VerticalAlignment="Center" 
+                               Margin="2,0"/>
+                    <TextBox Grid.Column="4" Text="{Binding IpSegment3}" 
+                             MaxLength="3" TextAlignment="Center"/>
+                    <TextBlock Grid.Column="5" Text="." VerticalAlignment="Center" 
+                               Margin="2,0"/>
+                    <TextBox Grid.Column="6" Text="{Binding IpSegment4}" 
+                             MaxLength="3" TextAlignment="Center"/>
+                </Grid>
+            </StackPanel>
+
+            <StackPanel Grid.Row="2">
+                <Button Content="Aggiorna" Command="{Binding RefreshCommand}" 
+                        Style="{StaticResource ModernButton}"/>
+                <Button Content="Stampa" Command="{Binding PrintCommand}" 
+                        Style="{StaticResource ModernButton}"/>
+                <Button Content="Visualizza/Stampa" Command="{Binding ViewPrintCommand}" 
+                        Style="{StaticResource ModernButton}"/>
+                <Button Content="Apri pagina web" Command="{Binding OpenWebPageCommand}" 
+                        Style="{StaticResource ModernButton}"/>
+                <Button Content="Gestione Stampanti" Command="{Binding ManagePrintersCommand}" 
+                        Style="{StaticResource ModernButton}"/>
+            </StackPanel>
+        </Grid>
+
+        <!-- Barra di stato in fondo -->
+        <StatusBar Grid.Row="2" Grid.ColumnSpan="3">
+            <StatusBarItem>
+                <TextBlock Text="{Binding StatusText}"/>
+            </StatusBarItem>
+            <Separator/>
+            <StatusBarItem>
+                <TextBlock Text="{Binding CurrentDirectory}"/>
+            </StatusBarItem>
+            <Separator/>
+            <StatusBarItem HorizontalAlignment="Right">
+                <TextBlock Text="{Binding VersionInfo}"/>
+            </StatusBarItem>
+        </StatusBar>
+    </Grid>
+</Window>
